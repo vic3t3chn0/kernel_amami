@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_proto.h 303834 2011-12-20 06:17:39Z $
+ * $Id: dhd_proto.h 364579 2012-10-24 17:56:37Z $
  */
 
 #ifndef _dhd_proto_h_
@@ -34,7 +34,7 @@
 #include <wlioctl.h>
 
 #ifndef IOCTL_RESP_TIMEOUT
-#define IOCTL_RESP_TIMEOUT  20000 /* In milli second */
+#define IOCTL_RESP_TIMEOUT  2000  /* In milli second default value for Production FW */
 #endif /* IOCTL_RESP_TIMEOUT */
 
 /*
@@ -84,9 +84,10 @@ extern int dhd_ioctl(dhd_pub_t * dhd_pub, dhd_ioctl_t *ioc, void * buf, uint buf
 extern int dhd_preinit_ioctls(dhd_pub_t *dhd);
 
 #ifdef PROP_TXSTATUS
-extern int dhd_wlfc_enque_sendq(void* state, int prec, void* p);
-extern int dhd_wlfc_commit_packets(void* state, f_commitpkt_t fcommit, void* commit_ctx);
-extern void dhd_wlfc_cleanup(dhd_pub_t *dhd);
+extern int dhd_wlfc_commit_packets(void* state, f_commitpkt_t fcommit,
+	void* commit_ctx, void *pktbuf);
+extern void dhd_wlfc_cleanup(dhd_pub_t *dhd, ifpkt_cb_t fn, int arg);
+extern bool ifpkt_fn(void* p, int ifid);
 #endif /* PROP_TXSTATUS */
 
 extern int dhd_process_pkt_reorder_info(dhd_pub_t *dhd, uchar *reorder_info_buf,
@@ -100,8 +101,6 @@ extern int dhd_process_pkt_reorder_info(dhd_pub_t *dhd, uchar *reorder_info_buf,
 #define DHD_PROTOCOL "bdc"
 #elif defined(CDC)
 #define DHD_PROTOCOL "cdc"
-#elif defined(RNDIS)
-#define DHD_PROTOCOL "rndis"
 #else
 #define DHD_PROTOCOL "unknown"
 #endif /* proto */

@@ -33,7 +33,6 @@
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
-#include <linux/export.h>
 #include "drmP.h"
 
 #if defined(CONFIG_DEBUG_FS)

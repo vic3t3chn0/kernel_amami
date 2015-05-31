@@ -56,10 +56,6 @@ extern void
 radeon_add_legacy_encoder(struct drm_device *dev, uint32_t encoder_enum,
 			  uint32_t supported_device);
 
-/* local */
-static int radeon_atom_get_max_vddc(struct radeon_device *rdev, u8 voltage_type,
-				    u16 voltage_id, u16 *voltage);
-
 union atom_supported_devices {
 	struct _ATOM_SUPPORTED_DEVICES_INFO info;
 	struct _ATOM_SUPPORTED_DEVICES_INFO_2 info_2;
@@ -257,9 +253,7 @@ static struct radeon_hpd radeon_atom_get_hpd_info_from_gpio(struct radeon_device
 
 	memset(&hpd, 0, sizeof(struct radeon_hpd));
 
-	if (ASIC_IS_DCE6(rdev))
-		reg = SI_DC_GPIO_HPD_A;
-	else if (ASIC_IS_DCE4(rdev))
+	if (ASIC_IS_DCE4(rdev))
 		reg = EVERGREEN_DC_GPIO_HPD_A;
 	else
 		reg = AVIVO_DC_GPIO_HPD_A;
@@ -444,13 +438,15 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
 	 */
 	if ((dev->pdev->device == 0x9498) &&
 	    (dev->pdev->subsystem_vendor == 0x1682) &&
-	    (dev->pdev->subsystem_device == 0x2452)) {
+	    (dev->pdev->subsystem_device == 0x2452) &&
+	    (i2c_bus->valid == false) &&
+	    !(supported_device & (ATOM_DEVICE_TV_SUPPORT | ATOM_DEVICE_CV_SUPPORT))) {
 		struct radeon_device *rdev = dev->dev_private;
 		*i2c_bus = radeon_lookup_i2c_gpio(rdev, 0x93);
 	}
 
 	/* Fujitsu D3003-S2 board lists DVI-I as DVI-D and VGA */
-	if ((dev->pdev->device == 0x9802) &&
+	if (((dev->pdev->device == 0x9802) || (dev->pdev->device == 0x9806)) &&
 	    (dev->pdev->subsystem_vendor == 0x1734) &&
 	    (dev->pdev->subsystem_device == 0x11bd)) {
 		if (*connector_type == DRM_MODE_CONNECTOR_VGA) {
@@ -713,13 +709,16 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 								(ATOM_SRC_DST_TABLE_FOR_ONE_OBJECT *)
 								(ctx->bios + data_offset +
 								 le16_to_cpu(router_obj->asObjects[k].usSrcDstTableOffset));
+							u8 *num_dst_objs = (u8 *)
+								((u8 *)router_src_dst_table + 1 +
+								 (router_src_dst_table->ucNumberOfSrc * 2));
+							u16 *dst_objs = (u16 *)(num_dst_objs + 1);
 							int enum_id;
 
 							router.router_id = router_obj_id;
-							for (enum_id = 0; enum_id < router_src_dst_table->ucNumberOfDst;
-							     enum_id++) {
+							for (enum_id = 0; enum_id < (*num_dst_objs); enum_id++) {
 								if (le16_to_cpu(path->usConnObjectId) ==
-								    le16_to_cpu(router_src_dst_table->usDstObjectID[enum_id]))
+								    le16_to_cpu(dst_objs[enum_id]))
 									break;
 							}
 
@@ -1620,7 +1619,9 @@ struct radeon_encoder_atom_dig *radeon_atombios_get_lvds_info(struct
 								kfree(edid);
 						}
 					}
-					record += sizeof(ATOM_FAKE_EDID_PATCH_RECORD);
+					record += fake_edid_record->ucFakeEDIDLength ?
+						fake_edid_record->ucFakeEDIDLength + 2 :
+						sizeof(ATOM_FAKE_EDID_PATCH_RECORD);
 					break;
 				case LCD_PANEL_RESOLUTION_RECORD_TYPE:
 					panel_res_record = (ATOM_PANEL_RESOLUTION_PATCH_RECORD *)record;
@@ -1894,8 +1895,6 @@ static const char *pp_lib_thermal_controller_names[] = {
 	"emc2103",
 	"Sumo",
 	"Northern Islands",
-	"Southern Islands",
-	"lm96163",
 };
 
 union power_info {
@@ -1912,7 +1911,6 @@ union pplib_clock_info {
 	struct _ATOM_PPLIB_RS780_CLOCK_INFO rs780;
 	struct _ATOM_PPLIB_EVERGREEN_CLOCK_INFO evergreen;
 	struct _ATOM_PPLIB_SUMO_CLOCK_INFO sumo;
-	struct _ATOM_PPLIB_SI_CLOCK_INFO si;
 };
 
 union pplib_power_state {
@@ -1996,6 +1994,8 @@ static int radeon_atombios_parse_power_table_1_3(struct radeon_device *rdev)
 	num_modes = power_info->info.ucNumOfPowerModeEntries;
 	if (num_modes > ATOM_MAX_NUMBEROF_POWER_BLOCK)
 		num_modes = ATOM_MAX_NUMBEROF_POWER_BLOCK;
+	if (num_modes == 0)
+		return state_index;
 	rdev->pm.power_state = kzalloc(sizeof(struct radeon_power_state) * num_modes, GFP_KERNEL);
 	if (!rdev->pm.power_state)
 		return state_index;
@@ -2170,11 +2170,6 @@ static void radeon_atombios_add_pplib_thermal_controller(struct radeon_device *r
 				 (controller->ucFanParameters &
 				  ATOM_PP_FANPARAMETERS_NOFAN) ? "without" : "with");
 			rdev->pm.int_thermal_type = THERMAL_TYPE_NI;
-		} else if (controller->ucType == ATOM_PP_THERMALCONTROLLER_SISLANDS) {
-			DRM_INFO("Internal thermal controller %s fan control\n",
-				 (controller->ucFanParameters &
-				  ATOM_PP_FANPARAMETERS_NOFAN) ? "without" : "with");
-			rdev->pm.int_thermal_type = THERMAL_TYPE_SI;
 		} else if ((controller->ucType ==
 			    ATOM_PP_THERMALCONTROLLER_EXTERNAL_GPIO) ||
 			   (controller->ucType ==
@@ -2295,7 +2290,6 @@ static bool radeon_atombios_parse_pplib_clock_info(struct radeon_device *rdev,
 						   union pplib_clock_info *clock_info)
 {
 	u32 sclk, mclk;
-	u16 vddc;
 
 	if (rdev->flags & RADEON_IS_IGP) {
 		if (rdev->family >= CHIP_PALM) {
@@ -2307,19 +2301,6 @@ static bool radeon_atombios_parse_pplib_clock_info(struct radeon_device *rdev,
 			sclk |= clock_info->rs780.ucLowEngineClockHigh << 16;
 			rdev->pm.power_state[state_index].clock_info[mode_index].sclk = sclk;
 		}
-	} else if (ASIC_IS_DCE6(rdev)) {
-		sclk = le16_to_cpu(clock_info->si.usEngineClockLow);
-		sclk |= clock_info->si.ucEngineClockHigh << 16;
-		mclk = le16_to_cpu(clock_info->si.usMemoryClockLow);
-		mclk |= clock_info->si.ucMemoryClockHigh << 16;
-		rdev->pm.power_state[state_index].clock_info[mode_index].mclk = mclk;
-		rdev->pm.power_state[state_index].clock_info[mode_index].sclk = sclk;
-		rdev->pm.power_state[state_index].clock_info[mode_index].voltage.type =
-			VOLTAGE_SW;
-		rdev->pm.power_state[state_index].clock_info[mode_index].voltage.voltage =
-			le16_to_cpu(clock_info->si.usVDDC);
-		rdev->pm.power_state[state_index].clock_info[mode_index].voltage.vddci =
-			le16_to_cpu(clock_info->si.usVDDCI);
 	} else if (ASIC_IS_DCE4(rdev)) {
 		sclk = le16_to_cpu(clock_info->evergreen.usEngineClockLow);
 		sclk |= clock_info->evergreen.ucEngineClockHigh << 16;
@@ -2347,18 +2328,11 @@ static bool radeon_atombios_parse_pplib_clock_info(struct radeon_device *rdev,
 	}
 
 	/* patch up vddc if necessary */
-	switch (rdev->pm.power_state[state_index].clock_info[mode_index].voltage.voltage) {
-	case ATOM_VIRTUAL_VOLTAGE_ID0:
-	case ATOM_VIRTUAL_VOLTAGE_ID1:
-	case ATOM_VIRTUAL_VOLTAGE_ID2:
-	case ATOM_VIRTUAL_VOLTAGE_ID3:
-		if (radeon_atom_get_max_vddc(rdev, VOLTAGE_TYPE_VDDC,
-					     rdev->pm.power_state[state_index].clock_info[mode_index].voltage.voltage,
-					     &vddc) == 0)
+	if (rdev->pm.power_state[state_index].clock_info[mode_index].voltage.voltage == 0xff01) {
+		u16 vddc;
+
+		if (radeon_atom_get_max_vddc(rdev, &vddc) == 0)
 			rdev->pm.power_state[state_index].clock_info[mode_index].voltage.voltage = vddc;
-		break;
-	default:
-		break;
 	}
 
 	if (rdev->flags & RADEON_IS_IGP) {
@@ -2394,6 +2368,8 @@ static int radeon_atombios_parse_power_table_4_5(struct radeon_device *rdev)
 	power_info = (union power_info *)(mode_info->atom_context->bios + data_offset);
 
 	radeon_atombios_add_pplib_thermal_controller(rdev, &power_info->pplib.sThermalController);
+	if (power_info->pplib.ucNumStates == 0)
+		return state_index;
 	rdev->pm.power_state = kzalloc(sizeof(struct radeon_power_state) *
 				       power_info->pplib.ucNumStates, GFP_KERNEL);
 	if (!rdev->pm.power_state)
@@ -2468,9 +2444,9 @@ static int radeon_atombios_parse_power_table_6(struct radeon_device *rdev)
 	int i, j, non_clock_array_index, clock_array_index;
 	int state_index = 0, mode_index = 0;
 	union pplib_clock_info *clock_info;
-	struct _StateArray *state_array;
-	struct _ClockInfoArray *clock_info_array;
-	struct _NonClockInfoArray *non_clock_info_array;
+	struct StateArray *state_array;
+	struct ClockInfoArray *clock_info_array;
+	struct NonClockInfoArray *non_clock_info_array;
 	bool valid;
 	union power_info *power_info;
 	int index = GetIndexIntoMasterTable(DATA, PowerPlayInfo);
@@ -2483,15 +2459,17 @@ static int radeon_atombios_parse_power_table_6(struct radeon_device *rdev)
 	power_info = (union power_info *)(mode_info->atom_context->bios + data_offset);
 
 	radeon_atombios_add_pplib_thermal_controller(rdev, &power_info->pplib.sThermalController);
-	state_array = (struct _StateArray *)
+	state_array = (struct StateArray *)
 		(mode_info->atom_context->bios + data_offset +
 		 le16_to_cpu(power_info->pplib.usStateArrayOffset));
-	clock_info_array = (struct _ClockInfoArray *)
+	clock_info_array = (struct ClockInfoArray *)
 		(mode_info->atom_context->bios + data_offset +
 		 le16_to_cpu(power_info->pplib.usClockInfoArrayOffset));
-	non_clock_info_array = (struct _NonClockInfoArray *)
+	non_clock_info_array = (struct NonClockInfoArray *)
 		(mode_info->atom_context->bios + data_offset +
 		 le16_to_cpu(power_info->pplib.usNonClockInfoArrayOffset));
+	if (state_array->ucNumEntries == 0)
+		return state_index;
 	rdev->pm.power_state = kzalloc(sizeof(struct radeon_power_state) *
 				       state_array->ucNumEntries, GFP_KERNEL);
 	if (!rdev->pm.power_state)
@@ -2516,7 +2494,7 @@ static int radeon_atombios_parse_power_table_6(struct radeon_device *rdev)
 				if (clock_array_index >= clock_info_array->ucNumEntries)
 					continue;
 				clock_info = (union pplib_clock_info *)
-					&clock_info_array->clockInfo[clock_array_index * clock_info_array->ucEntrySize];
+					&clock_info_array->clockInfo[clock_array_index];
 				valid = radeon_atombios_parse_pplib_clock_info(rdev,
 									       state_index, mode_index,
 									       clock_info);
@@ -2582,7 +2560,9 @@ void radeon_atombios_get_power_modes(struct radeon_device *rdev)
 		default:
 			break;
 		}
-	} else {
+	}
+
+	if (state_index == 0) {
 		rdev->pm.power_state = kzalloc(sizeof(struct radeon_power_state), GFP_KERNEL);
 		if (rdev->pm.power_state) {
 			rdev->pm.power_state[0].clock_info =
@@ -2673,7 +2653,6 @@ union set_voltage {
 	struct _SET_VOLTAGE_PS_ALLOCATION alloc;
 	struct _SET_VOLTAGE_PARAMETERS v1;
 	struct _SET_VOLTAGE_PARAMETERS_V2 v2;
-	struct _SET_VOLTAGE_PARAMETERS_V1_3 v3;
 };
 
 void radeon_atom_set_voltage(struct radeon_device *rdev, u16 voltage_level, u8 voltage_type)
@@ -2700,11 +2679,6 @@ void radeon_atom_set_voltage(struct radeon_device *rdev, u16 voltage_level, u8 v
 		args.v2.ucVoltageMode = SET_ASIC_VOLTAGE_MODE_SET_VOLTAGE;
 		args.v2.usVoltageLevel = cpu_to_le16(voltage_level);
 		break;
-	case 3:
-		args.v3.ucVoltageType = voltage_type;
-		args.v3.ucVoltageMode = ATOM_SET_VOLTAGE;
-		args.v3.usVoltageLevel = cpu_to_le16(voltage_level);
-		break;
 	default:
 		DRM_ERROR("Unknown table version %d, %d\n", frev, crev);
 		return;
@@ -2713,8 +2687,8 @@ void radeon_atom_set_voltage(struct radeon_device *rdev, u16 voltage_level, u8 v
 	atom_execute_table(rdev->mode_info.atom_context, index, (uint32_t *)&args);
 }
 
-static int radeon_atom_get_max_vddc(struct radeon_device *rdev, u8 voltage_type,
-				    u16 voltage_id, u16 *voltage)
+int radeon_atom_get_max_vddc(struct radeon_device *rdev,
+			     u16 *voltage)
 {
 	union set_voltage args;
 	int index = GetIndexIntoMasterTable(COMMAND, SetVoltage);
@@ -2734,15 +2708,6 @@ static int radeon_atom_get_max_vddc(struct radeon_device *rdev, u8 voltage_type,
 		atom_execute_table(rdev->mode_info.atom_context, index, (uint32_t *)&args);
 
 		*voltage = le16_to_cpu(args.v2.usVoltageLevel);
-		break;
-	case 3:
-		args.v3.ucVoltageType = voltage_type;
-		args.v3.ucVoltageMode = ATOM_GET_VOLTAGE_LEVEL;
-		args.v3.usVoltageLevel = cpu_to_le16(voltage_id);
-
-		atom_execute_table(rdev->mode_info.atom_context, index, (uint32_t *)&args);
-
-		*voltage = le16_to_cpu(args.v3.usVoltageLevel);
 		break;
 	default:
 		DRM_ERROR("Unknown table version %d, %d\n", frev, crev);

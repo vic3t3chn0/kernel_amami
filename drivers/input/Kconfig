@@ -3,7 +3,7 @@
 #
 
 menu "Input device support"
-	depends on !S390 && !UML
+	depends on !S390
 
 config INPUT
 	tristate "Generic input layer (needed for keyboard, mouse, ...)" if EXPERT
@@ -24,10 +24,6 @@ config INPUT
 	  module will be called input.
 
 if INPUT
-
-config INPUT_OF_MATRIX_KEYMAP
-	depends on USE_OF
-	bool
 
 config INPUT_FF_MEMLESS
 	tristate "Support for memoryless force-feedback devices"
@@ -165,6 +161,15 @@ config INPUT_APMPOWER
 	  To compile this driver as a module, choose M here: the
 	  module will be called apm-power.
 
+config INPUT_SECBRIDGE
+	default n
+	bool "Enable input bridge support"
+	help
+	  Say Y here if you want to enable input bridge.
+	  This is useful for enabling different operation
+	  according to key combinations.
+	  If unsure, say N.
+
 config INPUT_KEYRESET
 	tristate "Reset key"
 	depends on INPUT
@@ -173,6 +178,13 @@ config INPUT_KEYRESET
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called keyreset.
+
+config INPUT_FBSUSPEND
+	bool "FB notification suspend"
+	default n
+	---help---
+	  Call fb notification handlers when the user requested sleep state
+	  changes.
 
 comment "Input Device Drivers"
 

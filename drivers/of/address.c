@@ -8,13 +8,13 @@
 
 /* Max address size we deal with */
 #define OF_MAX_ADDR_CELLS	4
-#define OF_CHECK_ADDR_COUNT(na)	((na) > 0 && (na) <= OF_MAX_ADDR_CELLS)
-#define OF_CHECK_COUNTS(na, ns)	(OF_CHECK_ADDR_COUNT(na) && (ns) > 0)
+#define OF_CHECK_COUNTS(na, ns)	((na) > 0 && (na) <= OF_MAX_ADDR_CELLS && \
+			(ns) > 0)
 
 static struct of_bus *of_match_bus(struct device_node *np);
 static int __of_address_to_resource(struct device_node *dev,
 		const __be32 *addrp, u64 size, unsigned int flags,
-		const char *name, struct resource *r);
+				    struct resource *r);
 
 /* Debug utility */
 #ifdef DEBUG
@@ -181,7 +181,7 @@ const __be32 *of_get_pci_address(struct device_node *dev, int bar_no, u64 *size,
 	}
 	bus->count_cells(dev, &na, &ns);
 	of_node_put(parent);
-	if (!OF_CHECK_ADDR_COUNT(na))
+	if (!OF_CHECK_COUNTS(na, ns))
 		return NULL;
 
 	/* Get "reg" or "assigned-addresses" property */
@@ -215,7 +215,7 @@ int of_pci_address_to_resource(struct device_node *dev, int bar,
 	addrp = of_get_pci_address(dev, bar, &size, &flags);
 	if (addrp == NULL)
 		return -EINVAL;
-	return __of_address_to_resource(dev, addrp, size, flags, NULL, r);
+	return __of_address_to_resource(dev, addrp, size, flags, r);
 }
 EXPORT_SYMBOL_GPL(of_pci_address_to_resource);
 #endif /* CONFIG_PCI */
@@ -489,25 +489,6 @@ u64 of_translate_dma_address(struct device_node *dev, const __be32 *in_addr)
 }
 EXPORT_SYMBOL(of_translate_dma_address);
 
-bool of_can_translate_address(struct device_node *dev)
-{
-	struct device_node *parent;
-	struct of_bus *bus;
-	int na, ns;
-
-	parent = of_get_parent(dev);
-	if (parent == NULL)
-		return false;
-
-	bus = of_match_bus(parent);
-	bus->count_cells(dev, &na, &ns);
-
-	of_node_put(parent);
-
-	return OF_CHECK_COUNTS(na, ns);
-}
-EXPORT_SYMBOL(of_can_translate_address);
-
 const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
 		    unsigned int *flags)
 {
@@ -524,7 +505,7 @@ const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
 	bus = of_match_bus(parent);
 	bus->count_cells(dev, &na, &ns);
 	of_node_put(parent);
-	if (!OF_CHECK_ADDR_COUNT(na))
+	if (!OF_CHECK_COUNTS(na, ns))
 		return NULL;
 
 	/* Get "reg" or "assigned-addresses" property */
@@ -548,7 +529,7 @@ EXPORT_SYMBOL(of_get_address);
 
 static int __of_address_to_resource(struct device_node *dev,
 		const __be32 *addrp, u64 size, unsigned int flags,
-		const char *name, struct resource *r)
+				    struct resource *r)
 {
 	u64 taddr;
 
@@ -570,8 +551,7 @@ static int __of_address_to_resource(struct device_node *dev,
 		r->end = taddr + size - 1;
 	}
 	r->flags = flags;
-	r->name = name ? name : dev->full_name;
-
+	r->name = dev->full_name;
 	return 0;
 }
 
@@ -589,36 +569,13 @@ int of_address_to_resource(struct device_node *dev, int index,
 	const __be32	*addrp;
 	u64		size;
 	unsigned int	flags;
-	const char	*name = NULL;
 
 	addrp = of_get_address(dev, index, &size, &flags);
 	if (addrp == NULL)
 		return -EINVAL;
-
-	/* Get optional "reg-names" property to add a name to a resource */
-	of_property_read_string_index(dev, "reg-names",	index, &name);
-
-	return __of_address_to_resource(dev, addrp, size, flags, name, r);
+	return __of_address_to_resource(dev, addrp, size, flags, r);
 }
 EXPORT_SYMBOL_GPL(of_address_to_resource);
-
-struct device_node *of_find_matching_node_by_address(struct device_node *from,
-					const struct of_device_id *matches,
-					u64 base_address)
-{
-	struct device_node *dn = of_find_matching_node(from, matches);
-	struct resource res;
-
-	while (dn) {
-		if (of_address_to_resource(dn, 0, &res))
-			continue;
-		if (res.start == base_address)
-			return dn;
-		dn = of_find_matching_node(dn, matches);
-	}
-
-	return NULL;
-}
 
 
 /**
@@ -635,6 +592,6 @@ void __iomem *of_iomap(struct device_node *np, int index)
 	if (of_address_to_resource(np, index, &res))
 		return NULL;
 
-	return ioremap(res.start, resource_size(&res));
+	return ioremap(res.start, 1 + res.end - res.start);
 }
 EXPORT_SYMBOL(of_iomap);

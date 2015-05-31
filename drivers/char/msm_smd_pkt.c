@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,6 +8,11 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
  *
  */
 /*
@@ -374,8 +379,9 @@ static int __init smd_pkt_init(void)
 	for (i = 0; i < NUM_SMD_PKT_PORTS; ++i) {
 		smd_pkt_devp[i] = kzalloc(sizeof(struct smd_pkt_dev),
 					  GFP_KERNEL);
-		if (!smd_pkt_devp[i]) {
-			pr_err("kmalloc() failed\n");
+		if (IS_ERR(smd_pkt_devp[i])) {
+			r = PTR_ERR(smd_pkt_devp[i]);
+			pr_err("kmalloc() failed %d\n", r);
 			goto clean_cdevs;
 		}
 

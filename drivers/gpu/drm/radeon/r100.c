@@ -2233,6 +2233,7 @@ bool r100_gpu_is_lockup(struct radeon_device *rdev, struct radeon_ring *ring)
 void r100_bm_disable(struct radeon_device *rdev)
 {
 	u32 tmp;
+	u16 tmp16;
 
 	/* disable bus mastering */
 	tmp = RREG32(R_000030_BUS_CNTL);
@@ -2553,7 +2554,7 @@ static void r100_pll_errata_after_data(struct radeon_device *rdev)
 	 * or the chip could hang on a subsequent access
 	 */
 	if (rdev->pll_errata & CHIP_ERRATA_PLL_DELAY) {
-		mdelay(5);
+		udelay(5000);
 	}
 
 	/* This function is required to workaround a hardware bug in some (all?)

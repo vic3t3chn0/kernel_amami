@@ -654,13 +654,10 @@ nouveau_connector_detect_depth(struct drm_connector *connector)
 	if (nv_connector->edid && connector->display_info.bpc)
 		return;
 
-	/* if not, we're out of options unless we're LVDS, default to 8bpc */
-	if (nv_encoder->dcb->type != OUTPUT_LVDS) {
-		connector->display_info.bpc = 8;
-		return;
-	}
-
+	/* if not, we're out of options unless we're LVDS, default to 6bpc */
 	connector->display_info.bpc = 6;
+	if (nv_encoder->dcb->type != OUTPUT_LVDS)
+		return;
 
 	/* LVDS: panel straps */
 	if (bios->fp_no_ddc) {
@@ -870,8 +867,6 @@ drm_conntype_from_dcb(enum dcb_connector_type dcb)
 	case DCB_CONNECTOR_TV_0     :
 	case DCB_CONNECTOR_TV_1     :
 	case DCB_CONNECTOR_TV_3     : return DRM_MODE_CONNECTOR_TV;
-	case DCB_CONNECTOR_DMS59_0  :
-	case DCB_CONNECTOR_DMS59_1  :
 	case DCB_CONNECTOR_DVI_I    : return DRM_MODE_CONNECTOR_DVII;
 	case DCB_CONNECTOR_DVI_D    : return DRM_MODE_CONNECTOR_DVID;
 	case DCB_CONNECTOR_LVDS     :
@@ -1018,10 +1013,13 @@ nouveau_connector_create(struct drm_device *dev, int index)
 
 	/* Add overscan compensation options to digital outputs */
 	if (disp->underscan_property &&
-	    (type == DRM_MODE_CONNECTOR_DVID ||
-	     type == DRM_MODE_CONNECTOR_DVII ||
-	     type == DRM_MODE_CONNECTOR_HDMIA ||
-	     type == DRM_MODE_CONNECTOR_DisplayPort)) {
+	    (nv_connector->type == DCB_CONNECTOR_DVI_D ||
+	     nv_connector->type == DCB_CONNECTOR_DVI_I ||
+	     nv_connector->type == DCB_CONNECTOR_HDMI_0 ||
+	     nv_connector->type == DCB_CONNECTOR_HDMI_1 ||
+	     nv_connector->type == DCB_CONNECTOR_DP ||
+	     nv_connector->type == DCB_CONNECTOR_DMS59_DP0 ||
+	     nv_connector->type == DCB_CONNECTOR_DMS59_DP1)) {
 		drm_connector_attach_property(connector,
 					      disp->underscan_property,
 					      UNDERSCAN_OFF);

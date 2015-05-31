@@ -21,15 +21,21 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_dbg.h 308299 2012-01-14 01:36:58Z $
+ * $Id: dhd_dbg.h 353883 2012-08-29 04:43:40Z $
  */
 
 #ifndef _dhd_dbg_
 #define _dhd_dbg_
 
+#if !defined(CUSTOMER_HW4)
+#define USE_NET_RATELIMIT		net_ratelimit()
+#else
+#define USE_NET_RATELIMIT		1
+#endif
+
 #if defined(DHD_DEBUG)
 
-#define DHD_ERROR(args)	       do {if ((dhd_msg_level & DHD_ERROR_VAL) && (net_ratelimit())) \
+#define DHD_ERROR(args)		do {if ((dhd_msg_level & DHD_ERROR_VAL) && USE_NET_RATELIMIT) \
 								printf args;} while (0)
 #define DHD_TRACE(args)		do {if (dhd_msg_level & DHD_TRACE_VAL) printf args;} while (0)
 #define DHD_INFO(args)		do {if (dhd_msg_level & DHD_INFO_VAL) printf args;} while (0)
@@ -46,6 +52,12 @@
 #define DHD_ARPOE(args)		do {if (dhd_msg_level & DHD_ARPOE_VAL) printf args;} while (0)
 #define DHD_REORDER(args)	do {if (dhd_msg_level & DHD_REORDER_VAL) printf args;} while (0)
 
+#ifdef CUSTOMER_HW4
+#define DHD_TRACE_HW4	DHD_ERROR
+#else
+#define DHD_TRACE_HW4	DHD_TRACE
+#endif
+
 #define DHD_ERROR_ON()		(dhd_msg_level & DHD_ERROR_VAL)
 #define DHD_TRACE_ON()		(dhd_msg_level & DHD_TRACE_VAL)
 #define DHD_INFO_ON()		(dhd_msg_level & DHD_INFO_VAL)
@@ -61,10 +73,11 @@
 #define DHD_ISCAN_ON()		(dhd_msg_level & DHD_ISCAN_VAL)
 #define DHD_ARPOE_ON()		(dhd_msg_level & DHD_ARPOE_VAL)
 #define DHD_REORDER_ON()	(dhd_msg_level & DHD_REORDER_VAL)
+#define DHD_NOCHECKDIED_ON()	(dhd_msg_level & DHD_NOCHECKDIED_VAL)
 
 #else /* defined(BCMDBG) || defined(DHD_DEBUG) */
 
-#define DHD_ERROR(args)    	do {if (net_ratelimit()) printf args;} while (0)
+#define DHD_ERROR(args)		do {if (USE_NET_RATELIMIT) printf args;} while (0)
 #define DHD_TRACE(args)
 #define DHD_INFO(args)
 #define DHD_DATA(args)
@@ -79,6 +92,12 @@
 #define DHD_ISCAN(args)
 #define DHD_ARPOE(args)
 #define DHD_REORDER(args)
+
+#ifdef CUSTOMER_HW4
+#define DHD_TRACE_HW4	DHD_ERROR
+#else
+#define DHD_TRACE_HW4	DHD_TRACE
+#endif
 
 #define DHD_ERROR_ON()		0
 #define DHD_TRACE_ON()		0
@@ -95,6 +114,7 @@
 #define DHD_ISCAN_ON()		0
 #define DHD_ARPOE_ON()		0
 #define DHD_REORDER_ON()	0
+#define DHD_NOCHECKDIED_ON()	0
 #endif 
 
 #define DHD_LOG(args)

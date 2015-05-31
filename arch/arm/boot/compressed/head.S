@@ -10,11 +10,6 @@
  */
 #include <linux/linkage.h>
 
-#ifdef CONFIG_KEXEC_HARDBOOT
-  #include <asm/kexec.h>
-  #include <asm/memory.h>
-#endif
-
 /*
  * Debugging stuff
  *
@@ -63,7 +58,7 @@
 		add	\rb, \rb, #0x00010000	@ Ser1
 #endif
 		.endm
-#elif defined(CONFIG_ARCH_S3C24XX)
+#elif defined(CONFIG_ARCH_S3C2410)
 		.macro loadsp, rb, tmp
 		mov	\rb, #0x50000000
 		add	\rb, \rb, #0x4000 * CONFIG_S3C_LOWLEVEL_UART_PORT
@@ -140,64 +135,6 @@ start:
 1:		mov	r7, r1			@ save architecture ID
 		mov	r8, r2			@ save atags pointer
 
-#ifdef CONFIG_KEXEC_HARDBOOT
-		/* Check hardboot page for a kexec kernel. */
-		ldr	r3, =KEXEC_HB_PAGE_ADDR
-		ldr	r0, [r3]
-		ldr	r1, =KEXEC_HB_PAGE_MAGIC
-		teq	r0, r1
-		bne	not_booting_other
-
-		/* Clear hardboot page magic to avoid boot loop. */
-		mov	r0, #0
-		str	r0, [r3]
-
-		/*
-		 * Copy dtb from location up high in memory to default location.
-		 * Kernel freezes if this is not done.
-		 */
-		ldr	r1, [r3, #12]			@ kexec_boot_atags
-		ldr	r2, [r3, #16]			@ kexec_boot_atags_len
-		mov	r5, #0					@ iterator
-catags_cpy:
-		ldr	r0, [r1, r5]			@ from kexec_boot_atags
-		str	r0, [r8, r5]			@ to atags_pointer
-		add	r5, r5, #4
-		cmp	r5, r2
-		blo	catags_cpy
-
-#ifdef KEXEC_HB_KERNEL_LOC
-		/*
-		 * Copy kernel from location up high in memory to location in first 128MB.
-		 * Bootloader on hammerhead erases first 128MB of ram on reboot, so it can't
-		 * be in there before reboot, but decompressing in location above 128MB takes
-		 * a long time. This memcpy is much quicker, for some reason.
-		 */
-		ldr	r2, [r3, #4]				@ kexec_start_address
-		ldr	r4, [r3, #20]				@ kexec_kernel_len
-		ldr	r6, =KEXEC_HB_KERNEL_LOC    @ target
-		mov	r5, #0						@ iterator
-kernel_cpy:
-		ldr	r0, [r2, r5]				@ from kexec_start_address
-		str	r0, [r6, r5]				@ to KEXEC_HB_KERNEL_LOC
-		add	r5, r5, #4
-		cmp	r5, r4
-		blo	kernel_cpy
-#else
-		ldr	r6, [r3, #4]				@ kexec_start_address
-#endif
-
-		/* set registers and boot kexecd' kernel */
-		mov	r0, #0
-		ldr	r1, [r3, #8]				@ kexec_mach_type
-		mov	r2, r8						@ atags pointer
-		mov	pc, r6
-
-		.ltorg
-
-not_booting_other:
-#endif
-
 #ifndef __ARM_ARCH_2__
 		/*
 		 * Booting from Angel - need to enter SVC mode and disable
@@ -249,7 +186,7 @@ restart:	adr	r0, LC0
 		 * We might be running at a different address.  We need
 		 * to fix up various pointers.
 		 */
-		sub	r0, r0, r1		@ calculate the delta offset
+		sub  r0, r0, r1		@ calculate the delta offset
 		add	r6, r6, r0		@ _edata
 		add	r10, r10, r0		@ inflated kernel size location
 
@@ -279,104 +216,6 @@ restart:	adr	r0, LC0
 		mov	r10, r6
 #endif
 
-		mov	r5, #0			@ init dtb size to 0
-#ifdef CONFIG_ARM_APPENDED_DTB
-/*
- *   r0  = delta
- *   r2  = BSS start
- *   r3  = BSS end
- *   r4  = final kernel address
- *   r5  = appended dtb size (still unknown)
- *   r6  = _edata
- *   r7  = architecture ID
- *   r8  = atags/device tree pointer
- *   r9  = size of decompressed image
- *   r10 = end of this image, including  bss/stack/malloc space if non XIP
- *   r11 = GOT start
- *   r12 = GOT end
- *   sp  = stack pointer
- *
- * if there are device trees (dtb) appended to zImage, advance r10 so that the
- * dtb data will get relocated along with the kernel if necessary.
- */
-
-		ldr	lr, [r6, #0]
-#ifndef __ARMEB__
-		ldr	r1, =0xedfe0dd0		@ sig is 0xd00dfeed big endian
-#else
-		ldr	r1, =0xd00dfeed
-#endif
-		cmp	lr, r1
-		bne	dtb_check_done		@ not found
-
-#ifdef CONFIG_ARM_ATAG_DTB_COMPAT
-		/*
-		 * OK... Let's do some funky business here.
-		 * If we do have a DTB appended to zImage, and we do have
-		 * an ATAG list around, we want the later to be translated
-		 * and folded into the former here.  To be on the safe side,
-		 * let's temporarily move  the stack away into the malloc
-		 * area.  No GOT fixup has occurred yet, but none of the
-		 * code we're about to call uses any global variable.
-		*/
-		add	sp, sp, #0x10000
-		stmfd	sp!, {r0-r3, ip, lr}
-		mov	r0, r8
-		mov	r1, r6
-		sub	r2, sp, r6
-		bl	atags_to_fdt
-
-		/*
-		 * If returned value is 1, there is no ATAG at the location
-		 * pointed by r8.  Try the typical 0x100 offset from start
-		 * of RAM and hope for the best.
-		 */
-		cmp	r0, #1
-		sub	r0, r4, #TEXT_OFFSET
-		add	r0, r0, #0x100
-		mov	r1, r6
-		sub	r2, sp, r6
-		bleq	atags_to_fdt
-
-		ldmfd	sp!, {r0-r3, ip, lr}
-		sub	sp, sp, #0x10000
-#endif
-
-		mov	r8, r6			@ use the appended device tree
-
-		/*
-		 * Make sure that the DTB doesn't end up in the final
-		 * kernel's .bss area. To do so, we adjust the decompressed
-		 * kernel size to compensate if that .bss size is larger
-		 * than the relocated code.
-		 */
-		ldr	r5, =_kernel_bss_size
-		adr	r1, wont_overwrite
-		sub	r1, r6, r1
-		subs	r1, r5, r1
-		addhi	r9, r9, r1
-
-		/* Get the dtb's size */
-		ldr	r5, [r6, #4]
-#ifndef __ARMEB__
-		/* convert r5 (dtb size) to little endian */
-		eor	r1, r5, r5, ror #16
-		bic	r1, r1, #0x00ff0000
-		mov	r5, r5, ror #8
-		eor	r5, r5, r1, lsr #8
-#endif
-
-		/* preserve 64-bit alignment */
-		add	r5, r5, #7
-		bic	r5, r5, #7
-
-		/* relocate some pointers past the appended dtb */
-		add	r6, r6, r5
-		add	r10, r10, r5
-		add	sp, sp, r5
-dtb_check_done:
-#endif
-
 /*
  * Check to see if we will overwrite ourselves.
  *   r4  = final kernel address
@@ -384,14 +223,15 @@ dtb_check_done:
  *   r10 = end of this image, including  bss/stack/malloc space if non XIP
  * We basically want:
  *   r4 - 16k page directory >= r10 -> OK
- *   r4 + image length <= address of wont_overwrite -> OK
+ *   r4 + image length <= current position (pc) -> OK
  */
 		add	r10, r10, #16384
 		cmp	r4, r10
 		bhs	wont_overwrite
 		add	r10, r4, r9
-		adr	r9, wont_overwrite
-		cmp	r10, r9
+   ARM(		cmp	r10, pc		)
+ THUMB(		mov	lr, pc		)
+ THUMB(		cmp	r10, lr		)
 		bls	wont_overwrite
 
 /*
@@ -445,16 +285,20 @@ wont_overwrite:
  *   r2  = BSS start
  *   r3  = BSS end
  *   r4  = kernel execution address
- *   r5  = appended dtb size (0 if not present)
  *   r7  = architecture ID
  *   r8  = atags pointer
  *   r11 = GOT start
  *   r12 = GOT end
  *   sp  = stack pointer
  */
-		orrs	r1, r0, r5
+		teq	r0, #0
+#ifndef CONFIG_CRYPTO_FIPS
 		beq	not_relocated
-
+#else
+        movw r5, #:lower16:zimage_ram_base_addr
+        movt r5, #:upper16:zimage_ram_base_addr
+        beq not_relocated_copy
+#endif
 		add	r11, r11, r0
 		add	r12, r12, r0
 
@@ -467,23 +311,19 @@ wont_overwrite:
 		add	r2, r2, r0
 		add	r3, r3, r0
 
+#ifdef CONFIG_CRYPTO_FIPS
+        movw r5, #:lower16:zimage_ram_base_addr
+        movt r5, #:upper16:zimage_ram_base_addr
+        bl copy_compressed
+#endif
 		/*
 		 * Relocate all entries in the GOT table.
-		 * Bump bss entries to _edata + dtb size
 		 */
 1:		ldr	r1, [r11, #0]		@ relocate entries in the GOT
-		add	r1, r1, r0		@ This fixes up C references
-		cmp	r1, r2			@ if entry >= bss_start &&
-		cmphs	r3, r1			@       bss_end > entry
-		addhi	r1, r1, r5		@    entry += dtb size
-		str	r1, [r11], #4		@ next entry
+		add	r1, r1, r0		@ table.  This fixes up the
+		str	r1, [r11], #4		@ C references.
 		cmp	r11, r12
 		blo	1b
-
-		/* bump our bss pointers too */
-		add	r2, r2, r5
-		add	r3, r3, r5
-
 #else
 
 		/*
@@ -524,8 +364,7 @@ not_relocated:	mov	r0, #0
 		mov	r0, #0			@ must be zero
 		mov	r1, r7			@ restore architecture number
 		mov	r2, r8			@ restore atags pointer
- ARM(		mov	pc, r4	)		@ call kernel
- THUMB(		bx	r4	)		@ entry point is always ARM
+		mov	pc, r4			@ call kernel
 
 		.align	2
 		.type	LC0, #object
@@ -539,12 +378,39 @@ LC0:		.word	LC0			@ r1
 		.word	.L_user_stack_end	@ sp
 		.size	LC0, . - LC0
 
+#ifdef CONFIG_CRYPTO_FIPS
+        .equ   zimage_ram_base_addr, FIPS_KERNEL_RAM_BASE
+#endif
+
 #ifdef CONFIG_ARCH_RPC
 		.globl	params
 params:		ldr	r0, =0x10000100		@ params_phys for RPC
 		mov	pc, lr
 		.ltorg
 		.align
+#endif
+
+
+#ifdef CONFIG_CRYPTO_FIPS
+not_relocated_copy:
+		bl copy_compressed
+		b not_relocated
+
+copy_compressed:
+		mov r1, r5
+		add	r9, r4, #CONFIG_CRYPTO_FIPS_INTEG_OFFSET
+
+1:
+		ldmia	r1!, {r5}
+		stmia	r9!, {r5}
+		cmp	r1, r2
+		blo	1b
+
+		.rept 8
+		ldmia	r1!, {r5}
+		stmia	r9!, {r5}
+		.endr
+		mov	pc, lr
 #endif
 
 /*
@@ -573,6 +439,7 @@ cache_on:	mov	r3, #8			@ cache_on function
  * to cover all 32bit address and cacheable and bufferable.
  */
 __armv4_mpu_cache_on:
+		.arch armv4
 		mov	r0, #0x3f		@ 4G, the whole
 		mcr	p15, 0, r0, c6, c7, 0	@ PR7 Area Setting
 		mcr 	p15, 0, r0, c6, c7, 1
@@ -630,12 +497,6 @@ __armv3_mpu_cache_on:
 		mcr	p15, 0, r0, c7, c0, 0	@ invalidate whole cache v3
 		mov	pc, lr
 
-#ifdef CONFIG_CPU_DCACHE_WRITETHROUGH
-#define CB_BITS 0x08
-#else
-#define CB_BITS 0x0c
-#endif
-
 __setup_mmu:	sub	r3, r4, #16384		@ Page directory size
 		bic	r3, r3, #0xff		@ Align the pointer
 		bic	r3, r3, #0x3f00
@@ -647,14 +508,17 @@ __setup_mmu:	sub	r3, r4, #16384		@ Page directory size
 		mov	r9, r0, lsr #18
 		mov	r9, r9, lsl #18		@ start of RAM
 		add	r10, r9, #0x10000000	@ a reasonable RAM size
-		mov	r1, #0x12		@ XN|U + section mapping
-		orr	r1, r1, #3 << 10	@ AP=11
+		mov	r1, #0x12
+		orr	r1, r1, #3 << 10
 		add	r2, r3, #16384
 1:		cmp	r1, r9			@ if virt > start of RAM
-		cmphs	r10, r1			@   && end of RAM > virt
-		bic	r1, r1, #0x1c		@ clear XN|U + C + B
-		orrlo	r1, r1, #0x10		@ Set XN|U for non-RAM
-		orrhs	r1, r1, r6		@ set RAM section settings
+#ifdef CONFIG_CPU_DCACHE_WRITETHROUGH
+		orrhs	r1, r1, #0x08		@ set cacheable
+#else
+		orrhs	r1, r1, #0x0c		@ set cacheable, bufferable
+#endif
+		cmp	r1, r10			@ if virt > end of RAM
+		bichs	r1, r1, #0x0c		@ clear cacheable, bufferable
 		str	r1, [r0], #4		@ 1:1 mapping
 		add	r1, r1, #1048576
 		teq	r0, r2
@@ -665,7 +529,7 @@ __setup_mmu:	sub	r3, r4, #16384		@ Page directory size
  * so there is no map overlap problem for up to 1 MB compressed kernel.
  * If the execution is in RAM then we would only be duplicating the above.
  */
-		orr	r1, r6, #0x04		@ ensure B is set for this
+		mov	r1, #0x1e
 		orr	r1, r1, #3 << 10
 		mov	r2, pc
 		mov	r2, r2, lsr #20
@@ -677,16 +541,27 @@ __setup_mmu:	sub	r3, r4, #16384		@ Page directory size
 		mov	pc, lr
 ENDPROC(__setup_mmu)
 
+@ Enable unaligned access on v6, to allow better code generation
+@ for the decompressor C code:
+__armv6_mmu_cache_on:
+		.arch armv6
+		mrc	p15, 0, r0, c1, c0, 0	@ read SCTLR
+		bic	r0, r0, #2		@ A (no unaligned access fault)
+		orr	r0, r0, #1 << 22	@ U (v6 unaligned access model)
+		mcr	p15, 0, r0, c1, c0, 0	@ write SCTLR
+		b	__armv4_mmu_cache_on
+
 __arm926ejs_mmu_cache_on:
 #ifdef CONFIG_CPU_DCACHE_WRITETHROUGH
+		.arch armv5
 		mov	r0, #4			@ put dcache in WT mode
 		mcr	p15, 7, r0, c15, c0, 0
 #endif
 
 __armv4_mmu_cache_on:
+		.arch armv4
 		mov	r12, lr
 #ifdef CONFIG_MMU
-		mov	r6, #CB_BITS | 0x12	@ U
 		bl	__setup_mmu
 		mov	r0, #0
 		mcr	p15, 0, r0, c7, c10, 4	@ drain write buffer
@@ -704,11 +579,11 @@ __armv4_mmu_cache_on:
 		mov	pc, r12
 
 __armv7_mmu_cache_on:
+		.arch armv7-a
 		mov	r12, lr
 #ifdef CONFIG_MMU
 		mrc	p15, 0, r11, c0, c1, 4	@ read ID_MMFR0
 		tst	r11, #0xf		@ VMSA
-		movne	r6, #CB_BITS | 0x02	@ !XN
 		blne	__setup_mmu
 		mov	r0, #0
 		mcr	p15, 0, r0, c7, c10, 4	@ drain write buffer
@@ -716,18 +591,21 @@ __armv7_mmu_cache_on:
 		mcrne	p15, 0, r0, c8, c7, 0	@ flush I,D TLBs
 #endif
 		mrc	p15, 0, r0, c1, c0, 0	@ read control reg
+		bic	r0, r0, #1 << 28	@ clear SCTLR.TRE
 		orr	r0, r0, #0x5000		@ I-cache enable, RR cache replacement
 		orr	r0, r0, #0x003c		@ write buffer
+		bic	r0, r0, #2		@ A (no unaligned access fault)
+		orr	r0, r0, #1 << 22	@ U (v6 unaligned access model)
+						@ (needed for ARM1176)
 #ifdef CONFIG_MMU
 #ifdef CONFIG_CPU_ENDIAN_BE8
 		orr	r0, r0, #1 << 25	@ big-endian page tables
 #endif
 		orrne	r0, r0, #1		@ MMU enabled
-		movne	r1, #0xfffffffd		@ domain 0 = client
+		movne	r1, #-1
 		mcrne	p15, 0, r3, c2, c0, 0	@ load page table pointer
 		mcrne	p15, 0, r1, c3, c0, 0	@ load domain access control
 #endif
-		mcr	p15, 0, r0, c7, c5, 4	@ ISB
 		mcr	p15, 0, r0, c1, c0, 0	@ load control register
 		mrc	p15, 0, r0, c1, c0, 0	@ and read it back
 		mov	r0, #0
@@ -736,7 +614,6 @@ __armv7_mmu_cache_on:
 
 __fa526_cache_on:
 		mov	r12, lr
-		mov	r6, #CB_BITS | 0x12	@ U
 		bl	__setup_mmu
 		mov	r0, #0
 		mcr	p15, 0, r0, c7, c7, 0	@ Invalidate whole cache
@@ -751,7 +628,6 @@ __fa526_cache_on:
 
 __arm6_mmu_cache_on:
 		mov	r12, lr
-		mov	r6, #CB_BITS | 0x12	@ U
 		bl	__setup_mmu
 		mov	r0, #0
 		mcr	p15, 0, r0, c7, c0, 0	@ invalidate whole cache v3
@@ -958,7 +834,7 @@ proc_types:
 
 		.word	0x0007b000		@ ARMv6
 		.word	0x000ff000
-		W(b)	__armv4_mmu_cache_on
+		W(b)	__armv6_mmu_cache_on
 		W(b)	__armv4_mmu_cache_off
 		W(b)	__armv6_mmu_cache_flush
 
@@ -1078,6 +954,7 @@ cache_clean_flush:
 		mov	r3, #16
 		b	call_cache_fn
 
+		.arch armv4
 __armv4_mpu_cache_flush:
 		mov	r2, #1
 		mov	r3, #0
@@ -1096,6 +973,7 @@ __armv4_mpu_cache_flush:
 		mov	pc, lr
 		
 __fa526_cache_flush:
+		.arch armv6
 		mov	r1, #0
 		mcr	p15, 0, r1, c7, c14, 0	@ clean and invalidate D cache
 		mcr	p15, 0, r1, c7, c5, 0	@ flush I cache
@@ -1110,6 +988,7 @@ __armv6_mmu_cache_flush:
 		mcr	p15, 0, r1, c7, c10, 4	@ drain WB
 		mov	pc, lr
 
+		.arch armv7-a
 __armv7_mmu_cache_flush:
 		mrc	p15, 0, r10, c0, c1, 5	@ read ID_MMFR1
 		tst	r10, #0xf << 16		@ hierarchical cache (ARMv7)
@@ -1170,6 +1049,7 @@ iflush:
 		mcr	p15, 0, r10, c7, c5, 4	@ ISB
 		mov	pc, lr
 
+		.arch armv5
 __armv5tej_mmu_cache_flush:
 1:		mrc	p15, 0, r15, c7, c14, 3	@ test,clean,invalidate D cache
 		bne	1b
@@ -1177,6 +1057,7 @@ __armv5tej_mmu_cache_flush:
 		mcr	p15, 0, r0, c7, c10, 4	@ drain WB
 		mov	pc, lr
 
+		.arch armv4
 __armv4_mmu_cache_flush:
 		mov	r2, #64*1024		@ default: 32K dcache size (*2)
 		mov	r11, #32		@ default: 32 byte line size
@@ -1214,6 +1095,8 @@ __armv3_mpu_cache_flush:
 		mov	r1, #0
 		mcr	p15, 0, r1, c7, c0, 0	@ invalidate whole cache v3
 		mov	pc, lr
+
+		.arch armv4
 
 /*
  * Various debugging routines for printing hex characters and

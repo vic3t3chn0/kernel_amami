@@ -262,13 +262,10 @@ extern int rs690_mc_wait_for_idle(struct radeon_device *rdev);
  * rv515
  */
 struct rv515_mc_save {
-	u32 d1vga_control;
-	u32 d2vga_control;
 	u32 vga_render_control;
 	u32 vga_hdp_control;
-	u32 d1crtc_control;
-	u32 d2crtc_control;
 };
+
 int rv515_init(struct radeon_device *rdev);
 void rv515_fini(struct radeon_device *rdev);
 uint32_t rv515_mc_rreg(struct radeon_device *rdev, uint32_t reg);
@@ -401,11 +398,10 @@ void r700_cp_fini(struct radeon_device *rdev);
  * evergreen
  */
 struct evergreen_mc_save {
-	u32 vga_control[6];
 	u32 vga_render_control;
 	u32 vga_hdp_control;
-	u32 crtc_control[6];
 };
+
 void evergreen_pcie_gart_tlb_flush(struct radeon_device *rdev);
 int evergreen_init(struct radeon_device *rdev);
 void evergreen_fini(struct radeon_device *rdev);
@@ -460,30 +456,5 @@ uint32_t cayman_vm_page_flags(struct radeon_device *rdev,
 void cayman_vm_set_page(struct radeon_device *rdev, struct radeon_vm *vm,
 			unsigned pfn, uint64_t addr, uint32_t flags);
 int evergreen_ib_parse(struct radeon_device *rdev, struct radeon_ib *ib);
-
-/* DCE6 - SI */
-void dce6_bandwidth_update(struct radeon_device *rdev);
-
-/*
- * si
- */
-void si_fence_ring_emit(struct radeon_device *rdev,
-			struct radeon_fence *fence);
-void si_pcie_gart_tlb_flush(struct radeon_device *rdev);
-int si_init(struct radeon_device *rdev);
-void si_fini(struct radeon_device *rdev);
-int si_suspend(struct radeon_device *rdev);
-int si_resume(struct radeon_device *rdev);
-bool si_gpu_is_lockup(struct radeon_device *rdev, struct radeon_ring *cp);
-int si_asic_reset(struct radeon_device *rdev);
-void si_ring_ib_execute(struct radeon_device *rdev, struct radeon_ib *ib);
-int si_irq_set(struct radeon_device *rdev);
-int si_irq_process(struct radeon_device *rdev);
-int si_vm_init(struct radeon_device *rdev);
-void si_vm_fini(struct radeon_device *rdev);
-int si_vm_bind(struct radeon_device *rdev, struct radeon_vm *vm, int id);
-void si_vm_unbind(struct radeon_device *rdev, struct radeon_vm *vm);
-void si_vm_tlb_flush(struct radeon_device *rdev, struct radeon_vm *vm);
-int si_ib_parse(struct radeon_device *rdev, struct radeon_ib *ib);
 
 #endif

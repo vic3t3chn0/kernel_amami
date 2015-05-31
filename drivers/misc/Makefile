@@ -1,4 +1,4 @@
-#
+
 # Makefile for misc devices that really don't fit anywhere else.
 #
 
@@ -6,20 +6,20 @@ obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
 obj-$(CONFIG_AD525X_DPOT_I2C)	+= ad525x_dpot-i2c.o
 obj-$(CONFIG_AD525X_DPOT_SPI)	+= ad525x_dpot-spi.o
-obj-$(CONFIG_INTEL_MID_PTI)	+= pti.o
+0bj-$(CONFIG_INTEL_MID_PTI)	+= pti.o
 obj-$(CONFIG_ATMEL_PWM)		+= atmel_pwm.o
 obj-$(CONFIG_ATMEL_SSC)		+= atmel-ssc.o
 obj-$(CONFIG_ATMEL_TCLIB)	+= atmel_tclib.o
 obj-$(CONFIG_BMP085)		+= bmp085.o
 obj-$(CONFIG_ICS932S401)	+= ics932s401.o
 obj-$(CONFIG_LKDTM)		+= lkdtm.o
-obj-$(CONFIG_TIFM_CORE)       	+= tifm_core.o
-obj-$(CONFIG_TIFM_7XX1)       	+= tifm_7xx1.o
+obj-$(CONFIG_TIFM_CORE)		+= tifm_core.o
+obj-$(CONFIG_TIFM_7XX1)		+= tifm_7xx1.o
 obj-$(CONFIG_PHANTOM)		+= phantom.o
-obj-$(CONFIG_NFC_PN544)		+= pn544.o
 obj-$(CONFIG_SENSORS_BH1780)	+= bh1780gli.o
 obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
 obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
+obj-$(CONFIG_ANDROID_PMEM)	+= pmem.o
 obj-$(CONFIG_SGI_IOC4)		+= ioc4.o
 obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
 obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
@@ -30,7 +30,6 @@ obj-$(CONFIG_HP_ILO)		+= hpilo.o
 obj-$(CONFIG_APDS9802ALS)	+= apds9802als.o
 obj-$(CONFIG_ISL29003)		+= isl29003.o
 obj-$(CONFIG_ISL29020)		+= isl29020.o
-obj-$(CONFIG_USB_HSIC_SMSC_HUB) += smsc_hub.o
 obj-$(CONFIG_SENSORS_TSL2550)	+= tsl2550.o
 obj-$(CONFIG_EP93XX_PWM)	+= ep93xx_pwm.o
 obj-$(CONFIG_DS1682)		+= ds1682.o
@@ -41,6 +40,8 @@ obj-$(CONFIG_IWMC3200TOP)      += iwmc3200top/
 obj-$(CONFIG_HMC6352)		+= hmc6352.o
 obj-y				+= eeprom/
 obj-y				+= cb710/
+obj-$(CONFIG_MPU_SENSORS_MPU3050) += mpu3050/
+obj-$(CONFIG_MPU_SENSORS_MPU6050) += inv_mpu/
 obj-$(CONFIG_SPEAR13XX_PCIE_GADGET)	+= spear13xx_pcie_gadget.o
 obj-$(CONFIG_VMWARE_BALLOON)	+= vmw_balloon.o
 obj-$(CONFIG_ARM_CHARLCD)	+= arm-charlcd.o
@@ -49,33 +50,43 @@ obj-y				+= ti-st/
 obj-$(CONFIG_AB8500_PWM)	+= ab8500-pwm.o
 obj-y				+= lis3lv02d/
 obj-y				+= carma/
-obj-$(CONFIG_USB_SWITCH_FSA9480) += fsa9480.o
-obj-$(CONFIG_ALTERA_STAPL)	+=altera-stapl/
-obj-$(CONFIG_MAX8997_MUIC)	+= max8997-muic.o
 obj-$(CONFIG_WL127X_RFKILL)	+= wl127x-rfkill.o
+obj-$(CONFIG_APANIC)		+= apanic.o
 obj-$(CONFIG_SENSORS_AK8975)	+= akm8975.o
-obj-$(CONFIG_TSIF) += msm_tsif.o
-msm_tsif-objs := tsif.o
-obj-$(CONFIG_TSIF_CHRDEV) += tsif_chrdev.o
-obj-$(CONFIG_TSPP) += tspp.o
-obj-$(CONFIG_CI_BRIDGE_SPI) += ci-bridge-spi.o
-obj-$(CONFIG_HAPTIC_ISA1200)		+= isa1200.o
-obj-$(CONFIG_PMIC8058_PWM) += pmic8058-pwm.o
-obj-$(CONFIG_PMIC8XXX_VIBRATOR) += pm8xxx-vibrator.o
-obj-$(CONFIG_PMIC8XXX_NFC) += pm8xxx-nfc.o
-obj-$(CONFIG_PMIC8XXX_UPL) += pm8xxx-upl.o
-obj-$(CONFIG_MSM_MEMORY_LOW_POWER_MODE_SUSPEND_DEEP_POWER_DOWN) \
-	+= msm_migrate_pages.o
-obj-$(CONFIG_PMIC8058_XOADC) += pmic8058-xoadc.o
-obj-$(CONFIG_PM8941_FLASH) += pm8941-flash.o
-obj-$(CONFIG_QPNP_VIBRATOR) += qpnp-vibrator.o
-obj-$(CONFIG_QSEECOM) += qseecom.o
-obj-$(CONFIG_QFP_FUSE) += qfp_fuse.o
-obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
-obj-$(CONFIG_QPNP_MISC) += qpnp-misc.o
-obj-$(CONFIG_RAMDUMP_TAGS) += rdtags.o
-obj-$(CONFIG_CRASH_LAST_LOGS) += lastlogs.o
-obj-$(CONFIG_ISDBT_TUNER_SMTEJ11X) += isdbt_tuner_drv.o
-obj-y				+= felica_snfc/
-obj-$(CONFIG_RPM975H16E4A_IRDA) += rpm975h16e4a.o
-obj-$(CONFIG_ONESEG_TUNER_SMTVJ18X) += oneseg_tuner_drv.o
+obj-$(CONFIG_SAMSUNG_C2C)	+= c2c/
+obj-$(CONFIG_USBHUB_USB3503)	+= usb3503.o
+obj-$(CONFIG_USBHUB_USB3503_OTG_CONN)	+= usb3503_otg_conn.o
+obj-$(CONFIG_USBHUB_USB3803)	+= usb3803.o
+ifeq ($(CONFIG_SEC_MODEM_P8LTE),y)
+obj-$(CONFIG_SEC_MODEM)         += modem_if_na/
+else
+obj-$(CONFIG_SEC_MODEM)		+= modem_if/
+endif
+obj-$(CONFIG_MFD_MAX77693)	+= max77693-muic.o
+obj-$(CONFIG_STMPE811_ADC)	+= stmpe811-adc.o
+obj-$(CONFIG_JACK_MON)		+= jack.o
+obj-$(CONFIG_UART_SELECT)	+= uart_select.o
+obj-$(CONFIG_WIMAX_CMC)         += max8893.o
+ifeq ($(CONFIG_MUIC_DET_JACK),y)
+obj-$(CONFIG_SEC_DEV_JACK)	+= sec_jack_muic.o
+else
+obj-$(CONFIG_SEC_DEV_JACK)	+= sec_jack.o
+endif
+obj-$(CONFIG_MUIC_MAX8997)	+= max8997-muic.o
+obj-$(CONFIG_PN544)		+= pn544.o
+obj-$(CONFIG_FM34_WE395)	+= fm34_we395.o
+obj-$(CONFIG_AUDIENCE_ES305)	+= es305.o
+obj-y				+= 2mic/
+
+obj-$(CONFIG_SLP_PROCESS_MON)	+= slp_process_monitor.o
+obj-$(CONFIG_SLP_LOWMEM_NOTIFY)	+= slp_lowmem_notify.o
+
+obj-$(CONFIG_MACH_M0_CTC)   += cw_tty.o
+
+# Secure OS Mobicore Interface
+CFLAGS_tzic.o :=$(call as-instr,.arch_extension sec,-DREQUIRES_SEC=1)
+obj-$(CONFIG_MOBICORE_SUPPORT)  += tzic.o
+obj-$(CONFIG_CPU_UNDERVOLTING)	+= cpu_undervolting.o
+obj-$(CONFIG_MALI_CONTROL)	+= mali_control.o
+obj-$(CONFIG_M0_MODS)		+= m0_mods.o
+obj-$(CONFIG_TOUCH_WAKE)        += touch_wake.o

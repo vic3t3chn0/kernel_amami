@@ -1,5 +1,4 @@
-/* Copyright (c) 2008-2009, 2012-2013, The Linux Foundation.
- * All rights reserved.
+/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,10 +17,8 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/uaccess.h>
-#include <linux/ratelimit.h>
 #include <linux/crc-ccitt.h>
 #include "diagchar_hdlc.h"
-#include "diagchar.h"
 
 
 MODULE_LICENSE("GPL v2");
@@ -174,13 +171,10 @@ int diag_hdlc_decode(struct diag_hdlc_decode_type *hdlc)
 	uint8_t src_byte;
 
 	int pkt_bnd = 0;
-	int msg_start;
 
 	if (hdlc && hdlc->src_ptr && hdlc->dest_ptr &&
-	    (hdlc->src_size > hdlc->src_idx) &&
-	    (hdlc->dest_size > hdlc->dest_idx)) {
-
-		msg_start = (hdlc->src_idx == 0) ? 1 : 0;
+	    (hdlc->src_size - hdlc->src_idx > 0) &&
+	    (hdlc->dest_size - hdlc->dest_idx > 0)) {
 
 		src_ptr = hdlc->src_ptr;
 		src_ptr = &src_ptr[hdlc->src_idx];
@@ -207,13 +201,9 @@ int diag_hdlc_decode(struct diag_hdlc_decode_type *hdlc)
 							  ^ ESC_MASK;
 				}
 			} else if (src_byte == CONTROL_CHAR) {
-				if (msg_start && i == 0 && src_length > 1)
-					continue;
-				/* Byte 0x7E will be considered
-					as end of packet */
 				dest_ptr[len++] = src_byte;
-				i++;
 				pkt_bnd = 1;
+				i++;
 				break;
 			} else {
 				dest_ptr[len++] = src_byte;
@@ -230,38 +220,4 @@ int diag_hdlc_decode(struct diag_hdlc_decode_type *hdlc)
 	}
 
 	return pkt_bnd;
-}
-
-int crc_check(uint8_t *buf, uint16_t len)
-{
-	uint16_t crc = CRC_16_L_SEED;
-	uint8_t sent_crc[2] = {0, 0};
-
-	/*
-	 * The minimum length of a valid incoming packet is 4. 1 byte
-	 * of data and 3 bytes for CRC
-	 */
-	if (!buf || len < 4) {
-		pr_err_ratelimited("diag: In %s, invalid packet or length, buf: 0x%x, len: %d",
-				   __func__, (int)buf, len);
-		return -EIO;
-	}
-
-	/*
-	 * Run CRC check for the original input. Skip the last 3 CRC
-	 * bytes
-	 */
-	crc = crc_ccitt(crc, buf, len-3);
-	crc ^= CRC_16_L_SEED;
-
-	/* Check the computed CRC against the original CRC bytes. */
-	sent_crc[0] = buf[len-3];
-	sent_crc[1] = buf[len-2];
-	if (crc != *((uint16_t *)sent_crc)) {
-		pr_debug("diag: In %s, crc mismatch. expected: %x, sent %x.\n",
-				__func__, crc, *((uint16_t *)sent_crc));
-		return -EIO;
-	}
-
-	return 0;
 }

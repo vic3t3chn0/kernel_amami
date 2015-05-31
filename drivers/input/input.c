@@ -2,7 +2,6 @@
  * The input core
  *
  * Copyright (c) 1999-2002 Vojtech Pavlik
- * Copyright (C) 2012-2014 Sony Mobile Communications AB.
  */
 
 /*
@@ -28,6 +27,10 @@
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
 #include "input-compat.h"
+
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
+#endif
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input core");
@@ -177,11 +180,15 @@ static int input_handle_abs_event(struct input_dev *dev,
 		 */
 		if (*pval >= 0 && *pval < dev->mtsize)
 			dev->slot = *pval;
+		else
+			printk(KERN_DEBUG "[TSP] dev->slot[%d], pval[%d]\n",\
+				 dev->slot, *pval);
+
 
 		return INPUT_IGNORE_EVENT;
 	}
 
-	is_mt_event = input_is_mt_value(code);
+	is_mt_event = code >= ABS_MT_FIRST && code <= ABS_MT_LAST;
 
 	if (!is_mt_event) {
 		pold = &dev->absinfo[code].value;
@@ -243,7 +250,16 @@ static void input_handle_event(struct input_dev *dev,
 	case EV_KEY:
 		if (is_event_supported(code, dev->keybit, KEY_MAX) &&
 		    !!test_bit(code, dev->key) != value) {
-
+#ifdef CONFIG_TOUCH_WAKE
+      if (code == KEY_POWER && !device_is_suspended()) {
+        if (value == 1) {
+          powerkey_pressed();
+        }
+        else if (value == 0) {
+          powerkey_released();
+        }
+      }
+#endif
 			if (value != 2) {
 				__change_bit(code, dev->key);
 				if (value)
@@ -1575,11 +1591,9 @@ void input_reset_device(struct input_dev *dev)
 		 * Keys that have been pressed at suspend time are unlikely
 		 * to be still pressed when we resume.
 		 */
-		if (!test_bit(INPUT_PROP_NO_DUMMY_RELEASE, dev->propbit)) {
-			spin_lock_irq(&dev->event_lock);
-			input_dev_release_keys(dev);
-			spin_unlock_irq(&dev->event_lock);
-		}
+	/*	spin_lock_irq(&dev->event_lock);
+		input_dev_release_keys(dev);
+		spin_unlock_irq(&dev->event_lock);*/
 	}
 
 	mutex_unlock(&dev->mutex);
@@ -1605,15 +1619,8 @@ static int input_dev_resume(struct device *dev)
 {
 	struct input_dev *input_dev = to_input_dev(dev);
 
-	if (0) {
-		/* removed to avoid the injection of fake key release events */
-		input_reset_device(input_dev);
-	} else {
-		mutex_lock(&input_dev->mutex);
-		if (input_dev->users)
-			input_dev_toggle(input_dev, true);
-		mutex_unlock(&input_dev->mutex);
-	}
+	input_reset_device(input_dev);
+
 	return 0;
 }
 
@@ -1634,7 +1641,7 @@ static struct device_type input_dev_type = {
 #endif
 };
 
-static char *input_devnode(struct device *dev, umode_t *mode)
+static char *input_devnode(struct device *dev, mode_t *mode)
 {
 	return kasprintf(GFP_KERNEL, "input/%s", dev_name(dev));
 }

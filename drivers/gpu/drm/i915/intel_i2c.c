@@ -28,7 +28,6 @@
  */
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
-#include <linux/export.h>
 #include "drmP.h"
 #include "drm.h"
 #include "intel_drv.h"
@@ -390,7 +389,7 @@ int intel_setup_gmbus(struct drm_device *dev)
 		bus->has_gpio = intel_gpio_setup(bus, i);
 
 		/* XXX force bit banging until GMBUS is fully debugged */
-		if (bus->has_gpio)
+		if (bus->has_gpio && IS_GEN2(dev))
 			bus->force_bit = true;
 	}
 

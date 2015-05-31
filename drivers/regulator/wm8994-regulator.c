@@ -43,7 +43,7 @@ static int wm8994_ldo_enable(struct regulator_dev *rdev)
 	if (!ldo->enable)
 		return 0;
 
-	gpio_set_value_cansleep(ldo->enable, 1);
+	gpio_set_value(ldo->enable, 1);
 	ldo->is_enabled = true;
 
 	return 0;
@@ -57,7 +57,7 @@ static int wm8994_ldo_disable(struct regulator_dev *rdev)
 	if (!ldo->enable)
 		return -EINVAL;
 
-	gpio_set_value_cansleep(ldo->enable, 0);
+	gpio_set_value(ldo->enable, 0);
 	ldo->is_enabled = false;
 
 	return 0;
@@ -72,6 +72,12 @@ static int wm8994_ldo_is_enabled(struct regulator_dev *rdev)
 
 static int wm8994_ldo_enable_time(struct regulator_dev *rdev)
 {
+	struct wm8994_ldo *ldo = rdev_get_drvdata(rdev);
+	struct wm8994_pdata *pdata = ldo->wm8994->dev->platform_data;
+
+	if (pdata->ldo_ena_delay)
+		return pdata->ldo_ena_delay;
+
 	/* 3ms is fairly conservative but this shouldn't be too performance
 	 * critical; can be tweaked per-system if required. */
 	return 3000;
@@ -91,11 +97,14 @@ static int wm8994_ldo1_get_voltage_sel(struct regulator_dev *rdev)
 	struct wm8994_ldo *ldo = rdev_get_drvdata(rdev);
 	int val;
 
-	val = wm8994_reg_read(ldo->wm8994, WM8994_LDO_1);
-	if (val < 0)
-		return val;
-
-	return (val & WM8994_LDO1_VSEL_MASK) >> WM8994_LDO1_VSEL_SHIFT;
+	switch (ldo->wm8994->type) {
+	case WM8994:
+	case WM8958:
+	case WM1811:
+		return 6;
+	default:
+		return -EINVAL;
+	}
 }
 
 static int wm8994_ldo1_set_voltage(struct regulator_dev *rdev,
@@ -158,11 +167,15 @@ static int wm8994_ldo2_get_voltage_sel(struct regulator_dev *rdev)
 	struct wm8994_ldo *ldo = rdev_get_drvdata(rdev);
 	int val;
 
-	val = wm8994_reg_read(ldo->wm8994, WM8994_LDO_2);
-	if (val < 0)
-		return val;
-
-	return (val & WM8994_LDO2_VSEL_MASK) >> WM8994_LDO2_VSEL_SHIFT;
+	switch (ldo->wm8994->type) {
+	case WM8994:
+		return 2;
+	case WM8958:
+	case WM1811:
+		return 1;
+	default:
+		return -EINVAL;
+	}
 }
 
 static int wm8994_ldo2_set_voltage(struct regulator_dev *rdev,
@@ -241,7 +254,7 @@ static __devinit int wm8994_ldo_probe(struct platform_device *pdev)
 	if (!pdata)
 		return -ENODEV;
 
-	ldo = devm_kzalloc(&pdev->dev, sizeof(struct wm8994_ldo), GFP_KERNEL);
+	ldo = kzalloc(sizeof(struct wm8994_ldo), GFP_KERNEL);
 	if (ldo == NULL) {
 		dev_err(&pdev->dev, "Unable to allocate private data\n");
 		return -ENOMEM;
@@ -269,7 +282,7 @@ static __devinit int wm8994_ldo_probe(struct platform_device *pdev)
 		ldo->is_enabled = true;
 
 	ldo->regulator = regulator_register(&wm8994_ldo_desc[id], &pdev->dev,
-					     pdata->ldo[id].init_data, ldo, NULL);
+					     pdata->ldo[id].init_data, ldo);
 	if (IS_ERR(ldo->regulator)) {
 		ret = PTR_ERR(ldo->regulator);
 		dev_err(wm8994->dev, "Failed to register LDO%d: %d\n",
@@ -285,6 +298,7 @@ err_gpio:
 	if (gpio_is_valid(ldo->enable))
 		gpio_free(ldo->enable);
 err:
+	kfree(ldo);
 	return ret;
 }
 
@@ -297,6 +311,7 @@ static __devexit int wm8994_ldo_remove(struct platform_device *pdev)
 	regulator_unregister(ldo->regulator);
 	if (gpio_is_valid(ldo->enable))
 		gpio_free(ldo->enable);
+	kfree(ldo);
 
 	return 0;
 }

@@ -315,6 +315,9 @@ struct drm_connector *exynos_drm_connector_create(struct drm_device *dev,
 		connector->interlace_allowed = true;
 		connector->polled = DRM_CONNECTOR_POLL_HPD;
 		break;
+	case EXYNOS_DISPLAY_TYPE_LCD:
+		type = DRM_MODE_CONNECTOR_LVDS;
+		break;
 	case EXYNOS_DISPLAY_TYPE_VIDI:
 		type = DRM_MODE_CONNECTOR_VIRTUAL;
 		connector->polled = DRM_CONNECTOR_POLL_HPD;

@@ -34,7 +34,6 @@
  */
 
 #include <linux/highmem.h>
-#include <linux/export.h>
 #include "drmP.h"
 
 #if __OS_HAS_AGP

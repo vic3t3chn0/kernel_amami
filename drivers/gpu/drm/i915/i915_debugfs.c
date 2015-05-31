@@ -29,7 +29,6 @@
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
-#include <linux/export.h>
 #include "drmP.h"
 #include "drm.h"
 #include "intel_drv.h"
@@ -122,7 +121,7 @@ static const char *cache_level_str(int type)
 static void
 describe_obj(struct seq_file *m, struct drm_i915_gem_object *obj)
 {
-	seq_printf(m, "%p: %s%s %8zdKiB %04x %04x %d %d%s%s%s",
+	seq_printf(m, "%pK: %s%s %8zd %04x %04x %d %d%s%s%s",
 		   &obj->base,
 		   get_pin_flag(obj),
 		   get_tiling_flag(obj),
@@ -1224,9 +1223,6 @@ static int i915_emon_status(struct seq_file *m, void *unused)
 	unsigned long temp, chipset, gfx;
 	int ret;
 
-	if (!IS_GEN5(dev))
-		return -ENODEV;
-
 	ret = mutex_lock_interruptible(&dev->struct_mutex);
 	if (ret)
 		return ret;
@@ -1505,6 +1501,14 @@ static int i915_ppgtt_info(struct seq_file *m, void *data)
 	return 0;
 }
 
+static int
+i915_debugfs_common_open(struct inode *inode,
+			 struct file *filp)
+{
+	filp->private_data = inode->i_private;
+	return 0;
+}
+
 static ssize_t
 i915_wedged_read(struct file *filp,
 		 char __user *ubuf,
@@ -1555,7 +1559,7 @@ i915_wedged_write(struct file *filp,
 
 static const struct file_operations i915_wedged_fops = {
 	.owner = THIS_MODULE,
-	.open = simple_open,
+	.open = i915_debugfs_common_open,
 	.read = i915_wedged_read,
 	.write = i915_wedged_write,
 	.llseek = default_llseek,
@@ -1617,7 +1621,7 @@ i915_max_freq_write(struct file *filp,
 
 static const struct file_operations i915_max_freq_fops = {
 	.owner = THIS_MODULE,
-	.open = simple_open,
+	.open = i915_debugfs_common_open,
 	.read = i915_max_freq_read,
 	.write = i915_max_freq_write,
 	.llseek = default_llseek,
@@ -1688,7 +1692,7 @@ i915_cache_sharing_write(struct file *filp,
 
 static const struct file_operations i915_cache_sharing_fops = {
 	.owner = THIS_MODULE,
-	.open = simple_open,
+	.open = i915_debugfs_common_open,
 	.read = i915_cache_sharing_read,
 	.write = i915_cache_sharing_write,
 	.llseek = default_llseek,

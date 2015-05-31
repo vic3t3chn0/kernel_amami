@@ -235,7 +235,6 @@ nouveau_pm_profile_set(struct drm_device *dev, const char *profile)
 		return -EPERM;
 
 	strncpy(string, profile, sizeof(string));
-	string[sizeof(string) - 1] = 0;
 	if ((ptr = strchr(string, '\n')))
 		*ptr = '\0';
 

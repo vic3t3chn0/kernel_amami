@@ -24,7 +24,6 @@
  *	Li Peng <peng.li@intel.com>
  */
 
-#include <linux/export.h>
 #include <linux/mutex.h>
 #include <linux/pci.h>
 #include <linux/i2c.h>

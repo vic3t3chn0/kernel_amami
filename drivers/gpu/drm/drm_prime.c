@@ -26,7 +26,6 @@
  *
  */
 
-#include <linux/export.h>
 #include <linux/dma-buf.h>
 #include "drmP.h"
 

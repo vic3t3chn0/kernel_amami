@@ -27,10 +27,6 @@ config USB_XHCI_HCD
 	  To compile this driver as a module, choose M here: the
 	  module will be called xhci-hcd.
 
-config USB_XHCI_PLATFORM
-	tristate
-	depends on USB_XHCI_HCD
-
 config USB_XHCI_HCD_DEBUGGING
 	bool "Debugging for the xHCI host controller"
 	depends on USB_XHCI_HCD
@@ -40,6 +36,12 @@ config USB_XHCI_HCD_DEBUGGING
 	  This should only be used for debugging xHCI driver bugs.
 
 	  If unsure, say N.
+
+config USB_XHCI_EXYNOS
+	boolean "EXYNOS XHCI support"
+	depends on USB_XHCI_HCD && ARCH_EXYNOS
+	help
+	 Enable support for the EXYNOS SOC's on-chip XHCI controller.
 
 config USB_EHCI_HCD
 	tristate "EHCI HCD (USB 2.0) support"
@@ -62,19 +64,6 @@ config USB_EHCI_HCD
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called ehci-hcd.
-
-config USB_EHCI_EHSET
-	bool "Embedded High-speed Host Electrical Test Support"
-	depends on USB_EHCI_HCD
-	---help---
-	  This option is required for EHSET Host Compliance Tests support on an
-	  embedded Hi-speed USB Host or OTG port.
-
-	  This enables the software support for the "Single Step Set Featue" test.
-	  Apart from this test, other EHSET tests TEST_SE0/J/K/PACKET are part
-	  of EHCI specification and their support already exists in the EHCI driver.
-
-	  If unsure, say N.
 
 config USB_EHCI_ROOT_HUB_TT
 	bool "Root Hub Transaction Translators"
@@ -147,7 +136,7 @@ config USB_FSL_MPH_DR_OF
 	tristate
 
 config USB_EHCI_FSL
-	bool "Support for Freescale PPC on-chip EHCI USB controller"
+	bool "Support for Freescale on-chip EHCI USB controller"
 	depends on USB_EHCI_HCD && FSL_SOC
 	select USB_EHCI_ROOT_HUB_TT
 	select USB_FSL_MPH_DR_OF if OF
@@ -155,7 +144,7 @@ config USB_EHCI_FSL
 	  Variation of ARC USB block used in some Freescale chips.
 
 config USB_EHCI_MXC
-	bool "Support for Freescale i.MX on-chip EHCI USB controller"
+	bool "Support for Freescale on-chip EHCI USB controller"
 	depends on USB_EHCI_HCD && ARCH_MXC
 	select USB_EHCI_ROOT_HUB_TT
 	---help---
@@ -182,24 +171,6 @@ config USB_EHCI_MSM
 	  This driver is not supported on boards like trout which
 	  has an external PHY.
 
-config USB_EHCI_MSM_HSIC
-	bool "Support for HSIC based MSM on-chip EHCI USB controller"
-	depends on USB_EHCI_HCD && ARCH_MSM
-	---help---
-	  Enables support for the HSIC (High Speed Inter-Chip) based
-	  USB Host controller present on the Qualcomm chipsets.
-
-	  HSIC is a supplement to USB 2.0 specification and is preferred
-	  for chip-to-chip interconnect (having maximum circuit length of
-	  10cm) as it removes the analog transceivers.
-
-config USB_EHCI_MSM_HOST4
-	bool "Support for MSM on-chip EHCI USB controller# 4"
-	depends on USB_EHCI_HCD && ARCH_MSM && ARCH_APQ8064
-	---help---
-	  Enables support for the EHCI Compliant USB Host controller# 4
-	  present on the Qualcomm chipsets.
-
 config USB_EHCI_TEGRA
        boolean "NVIDIA Tegra HCD support"
        depends on USB_EHCI_HCD && ARCH_TEGRA
@@ -224,19 +195,24 @@ config USB_EHCI_SH
 	  If you use the PCI EHCI controller, this option is not necessary.
 
 config USB_EHCI_S5P
-       boolean "S5P EHCI support"
-       depends on USB_EHCI_HCD && PLAT_S5P
-       help
+	boolean "S5P EHCI support"
+	depends on USB_EHCI_HCD && PLAT_S5P
+	help
 	 Enable support for the S5P SOC's on-chip EHCI controller.
 
-config USB_EHCI_MV
-	bool "EHCI support for Marvell on-chip controller"
-	depends on USB_EHCI_HCD && (ARCH_PXA || ARCH_MMP)
-	select USB_EHCI_ROOT_HUB_TT
-	---help---
-	  Enables support for Marvell (including PXA and MMP series) on-chip
-	  USB SPH and OTG controller. SPH is a single port host, and it can
-	  only be EHCI host. OTG is controller that can switch to host mode.
+config USB_S5P_HSIC0
+	boolean "S5P HSIC0 support"
+	depends on USB_EHCI_HCD && PLAT_S5P && USB_EHCI_S5P
+	default y
+	help
+	 Enable support for the S5P SOC's on-chip HSIC PHY.
+
+config USB_S5P_HSIC1
+	boolean "S5P HSIC1 support"
+	depends on USB_EHCI_HCD && PLAT_S5P && USB_EHCI_S5P
+	default y
+	help
+	 Enable support for the S5P SOC's on-chip HSIC PHY.
 
 config USB_W90X900_EHCI
 	bool "W90X900(W90P910) EHCI support"
@@ -253,15 +229,11 @@ config USB_CNS3XXX_EHCI
 	  support.
 
 config USB_EHCI_ATH79
-	bool "EHCI support for AR7XXX/AR9XXX SoCs (DEPRECATED)"
-	depends on USB_EHCI_HCD && (SOC_AR71XX || SOC_AR724X || SOC_AR913X || SOC_AR933X)
+	bool "EHCI support for AR7XXX/AR9XXX SoCs"
+	depends on USB_EHCI_HCD && (SOC_AR71XX || SOC_AR724X || SOC_AR913X)
 	select USB_EHCI_ROOT_HUB_TT
-	select USB_EHCI_HCD_PLATFORM
 	default y
 	---help---
-	  This option is deprecated now and the driver was removed, use
-	  USB_EHCI_HCD_PLATFORM instead.
-
 	  Enables support for the built-in EHCI controller present
 	  on the Atheros AR7XXX/AR9XXX SoCs.
 
@@ -277,21 +249,6 @@ config USB_OXU210HP_HCD
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called oxu210hp-hcd.
-
-config USB_EHCI_MSM_72K
-	bool "Support for Legacy Qualcomm on-chip EHCI USB controller"
-	depends on USB_EHCI_HCD && USB_MSM_OTG_72K && ARCH_MSM
-	---help---
-	  This driver enables support for USB host controller
-	  in pre 8660 qualcomm chipsets(8660, 7X30, 8X50 and 7X27).
-
-config USB_FS_HOST
-	bool "Support for Full Speed Host Mode"
-	depends on USB_EHCI_MSM_72K && ARCH_QSD8X50
-	default n
-	---help---
-	  Enables support for the full speed USB controller core present
-	  on the Qualcomm chipsets
 
 config USB_ISP116X_HCD
 	tristate "ISP116X HCD support"
@@ -366,14 +323,10 @@ config USB_OHCI_HCD_OMAP3
 	  OMAP3 and later chips.
 
 config USB_OHCI_ATH79
-	bool "USB OHCI support for the Atheros AR71XX/AR7240 SoCs (DEPRECATED)"
+	bool "USB OHCI support for the Atheros AR71XX/AR7240 SoCs"
 	depends on USB_OHCI_HCD && (SOC_AR71XX || SOC_AR724X)
-	select USB_OHCI_HCD_PLATFORM
 	default y
 	help
-	  This option is deprecated now and the driver was removed, use
-	  USB_OHCI_HCD_PLATFORM instead.
-
 	  Enables support for the built-in OHCI controller present on the
 	  Atheros AR71XX/AR7240 SoCs.
 
@@ -438,11 +391,11 @@ config USB_OHCI_SH
 	  Enables support for the on-chip OHCI controller on the SuperH.
 	  If you use the PCI OHCI controller, this option is not necessary.
 
-config USB_OHCI_EXYNOS
-	boolean "OHCI support for Samsung EXYNOS SoC Series"
-	depends on USB_OHCI_HCD && ARCH_EXYNOS
+config USB_OHCI_S5P
+	boolean "S5P OHCI support"
+	depends on USB_OHCI_HCD && PLAT_S5P
 	help
-	 Enable support for the Samsung Exynos SOC's on-chip OHCI controller.
+	 Enable support for the S5P SOC's on-chip OHCI controller.
 
 config USB_CNS3XXX_OHCI
 	bool "Cavium CNS3XXX OHCI Module"
@@ -450,26 +403,6 @@ config USB_CNS3XXX_OHCI
 	---help---
 	  Enable support for the CNS3XXX SOC's on-chip OHCI controller.
 	  It is needed for low-speed USB 1.0 device support.
-
-config USB_OHCI_HCD_PLATFORM
-	bool "Generic OHCI driver for a platform device"
-	depends on USB_OHCI_HCD && EXPERIMENTAL
-	default n
-	---help---
-	  Adds an OHCI host driver for a generic platform device, which
-	  provieds a memory space and an irq.
-
-	  If unsure, say N.
-
-config USB_EHCI_HCD_PLATFORM
-	bool "Generic EHCI driver for a platform device"
-	depends on USB_EHCI_HCD && EXPERIMENTAL
-	default n
-	---help---
-	  Adds an EHCI host driver for a generic platform device, which
-	  provieds a memory space and an irq.
-
-	  If unsure, say N.
 
 config USB_OHCI_BIG_ENDIAN_DESC
 	bool
@@ -608,23 +541,10 @@ config USB_R8A66597_HCD
 	  To compile this driver as a module, choose M here: the
 	  module will be called r8a66597-hcd.
 
-config USB_RENESAS_USBHS_HCD
-	tristate "Renesas USBHS HCD support"
-	depends on USB
-	depends on USB_RENESAS_USBHS
-	help
-	  The Renesas USBHS is a USB 2.0 host and peripheral controller.
-
-	  Enable this option if your board has this chip, and you want
-	  to use it as a host controller.  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called renesas-usbhs.
-
 config USB_WHCI_HCD
 	tristate "Wireless USB Host Controller Interface (WHCI) driver (EXPERIMENTAL)"
 	depends on EXPERIMENTAL
-	depends on PCI && USB && UWB
+	depends on PCI && USB
 	select USB_WUSB
 	select UWB_WHCI
 	help
@@ -634,19 +554,10 @@ config USB_WHCI_HCD
 	  To compile this driver a module, choose M here: the module
 	  will be called "whci-hcd".
 
-config USB_PEHCI_HCD
-	tristate "ST-E ISP1763A Host Controller"
-	depends on USB
-	help
-	  Driver for ST-E isp1763A USB Host 2.0 Controllers.
-
-	  To compile this driver a module, choose M here: the module
-	  will be called "pehci".
-
 config USB_HWA_HCD
 	tristate "Host Wire Adapter (HWA) driver (EXPERIMENTAL)"
 	depends on EXPERIMENTAL
-	depends on USB && UWB
+	depends on USB
 	select USB_WUSB
 	select UWB_HWA
 	help
@@ -659,11 +570,11 @@ config USB_HWA_HCD
 	  will be called "hwa-hc".
 
 config USB_IMX21_HCD
-       tristate "i.MX21 HCD support"
-       depends on USB && ARM && ARCH_MXC
+       tristate "iMX21 HCD support"
+       depends on USB && ARM && MACH_MX21
        help
          This driver enables support for the on-chip USB host in the
-         i.MX21 processor.
+         iMX21 processor.
 
          To compile this driver as a module, choose M here: the
          module will be called "imx21-hcd".
@@ -694,9 +605,17 @@ config USB_OCTEON2_COMMON
 	bool
 	default y if USB_OCTEON_EHCI || USB_OCTEON_OHCI
 
-config USB_HOST_EXTRA_NOTIFICATION
-	bool "USB host extra notification"
-	depends on USB
-	default n
-	help
-	  Provides the functions to notify extra USB host related events.
+config USB_S3C_OTG_HOST
+        tristate "S3C USB OTG Host support"
+        depends on USB && (PLAT_S3C64XX || PLAT_S5P)
+        help
+          Samsung's S3C64XX processors include high speed USB OTG2.0
+          controller. It has 15 configurable endpoints, as well as
+          endpoint zero (for control transfers).
+
+          This driver support only OTG Host role. If you want to use
+          OTG Device role, select USB Gadget support and S3C OTG Device.
+
+          Say "y" to link the driver statically, or "m" to build a
+          dynamically linked module called "s3c_otg_hcd" and force all
+          drivers to also be dynamically linked.

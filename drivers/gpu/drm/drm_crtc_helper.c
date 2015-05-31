@@ -29,7 +29,6 @@
  *      Jesse Barnes <jesse.barnes@intel.com>
  */
 
-#include <linux/export.h>
 #include <linux/moduleparam.h>
 
 #include "drmP.h"

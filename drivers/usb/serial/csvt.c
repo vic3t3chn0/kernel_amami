@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/tty.h>
 #include <linux/serial.h>
@@ -48,7 +47,6 @@ struct csvt_ctrl_dev {
 
 static const struct usb_device_id id_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x05c6 , 0x904c, 0xff, 0xfe, 0xff)},
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x05c6 , 0x9075, 0xff, 0xfe, 0xff)},
 	{}, /* terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, id_table);
@@ -401,6 +399,7 @@ static struct usb_serial_driver csvt_device = {
 	},
 	.description		= "qc_csvt",
 	.id_table		= id_table,
+	.usb_driver		= &csvt_driver,
 	.num_ports		= 1,
 	.open			= csvt_ctrl_open,
 	.close			= csvt_ctrl_close,
@@ -415,18 +414,20 @@ static struct usb_serial_driver csvt_device = {
 	.release		= csvt_ctrl_release,
 };
 
-static struct usb_serial_driver * const serial_drivers[] = {
-	&csvt_device,
-	NULL,
-};
-
 static int __init csvt_init(void)
 {
 	int	retval;
 
-	retval = usb_serial_register_drivers(&csvt_driver, serial_drivers);
+	retval = usb_serial_register(&csvt_device);
 	if (retval) {
 		err("%s: usb serial register failed\n", __func__);
+		return retval;
+	}
+
+	retval = usb_register(&csvt_driver);
+	if (retval) {
+		usb_serial_deregister(&csvt_device);
+		err("%s: usb register failed\n", __func__);
 		return retval;
 	}
 
@@ -435,7 +436,8 @@ static int __init csvt_init(void)
 
 static void __exit csvt_exit(void)
 {
-	usb_serial_deregister_drivers(&csvt_driver, serial_drivers);
+	usb_deregister(&csvt_driver);
+	usb_serial_deregister(&csvt_device);
 }
 
 module_init(csvt_init);

@@ -1,7 +1,6 @@
 menuconfig ION
 	tristate "Ion Memory Manager"
 	select GENERIC_ALLOCATOR
-	select DMA_SHARED_BUFFER
 	help
 	  Chose this option to enable the ION Memory Manager.
 
@@ -11,8 +10,19 @@ config ION_TEGRA
 	help
 	  Choose this option if you wish to use ion on an nVidia Tegra.
 
-config ION_MSM
-	tristate "Ion for MSM"
-	depends on ARCH_MSM && ION
+config ION_EXYNOS
+	tristate "Ion for Exynos"
+	depends on ARCH_EXYNOS && ION
+	select CMA
 	help
-	  Choose this option if you wish to use ion on an MSM target.
+	  Choose this option if you wish to use ion on a Samsung Exynos.
+
+config ION_EXYNOS_CONTIGHEAP_SIZE
+	int "Size in Kilobytes of memory pool of EXYNOS_CONTIG_HEAP"
+	depends on ION_EXYNOS && CMA
+	default 45056
+
+config ION_EXYNOS_CONTIGHEAP_DEBUG
+	bool "Debug message for allocation, free of CONTIGHEAP"
+	depends on ION_EXYNOS && CMA
+	default n
